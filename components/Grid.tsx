@@ -81,7 +81,7 @@ export default function Grid() {
       
       // Ensure we have at least 6 categories
       if (allCategories.length < 6) {
-        console.error('Not enough categories: need at least 6, found', allCategories.length);
+        console.error(`Insufficient categories: need at least 6, found ${allCategories.length}`);
         setError(`Niewystarczająca liczba kategorii. Potrzeba co najmniej 6, znaleziono ${allCategories.length}.`);
         setLoading(false);
         return;
@@ -107,7 +107,7 @@ export default function Grid() {
       ));
       setLoading(false);
     } catch (error) {
-      console.error('Error loading categories:', error);
+      console.error('Error loading categories:', error instanceof Error ? error.message : error);
       setError('Błąd podczas ładowania kategorii. Spróbuj odświeżyć stronę.');
       setLoading(false);
     }
