@@ -78,8 +78,19 @@ export default function Grid() {
 
       const allCategories = (categories || []) as Category[];
       
-      // Shuffle all categories randomly
-      const shuffled = [...allCategories].sort(() => Math.random() - 0.5);
+      // Ensure we have at least 6 categories
+      if (allCategories.length < 6) {
+        console.error('Not enough categories: need at least 6, found', allCategories.length);
+        setLoading(false);
+        return;
+      }
+      
+      // Fisher-Yates shuffle algorithm for unbiased randomization
+      const shuffled = [...allCategories];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
       
       // Take first 3 for rows and next 3 for columns
       const rows = shuffled.slice(0, 3);
