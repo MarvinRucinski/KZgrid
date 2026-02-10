@@ -72,14 +72,18 @@ export default function Grid() {
     try {
       const { data: categories, error } = await supabase
         .from('categories')
-        .select('*')
-        .order('position');
+        .select('*');
 
       if (error) throw error;
 
       const allCategories = (categories || []) as Category[];
-      const rows = allCategories.filter(c => c.type === 'row').slice(0, 3);
-      const cols = allCategories.filter(c => c.type === 'column').slice(0, 3);
+      
+      // Shuffle all categories randomly
+      const shuffled = [...allCategories].sort(() => Math.random() - 0.5);
+      
+      // Take first 3 for rows and next 3 for columns
+      const rows = shuffled.slice(0, 3);
+      const cols = shuffled.slice(3, 6);
 
       setRowCategories(rows);
       setColumnCategories(cols);
