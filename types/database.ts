@@ -95,6 +95,35 @@ export interface Database {
           column_categories?: string[]
         }
       }
+      answer_statistics: {
+        Row: {
+          id: string
+          user_id: string
+          row_category_id: string
+          column_category_id: string
+          usage_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          row_category_id: string
+          column_category_id: string
+          usage_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          row_category_id?: string
+          column_category_id?: string
+          usage_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
