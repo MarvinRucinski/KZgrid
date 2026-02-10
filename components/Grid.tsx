@@ -21,7 +21,39 @@ interface Category {
 interface CellData {
   user: User | null;
   isCorrect: boolean | null;
+  rarity?: 'legendary' | 'epic' | 'rare' | 'uncommon' | 'common';
 }
+
+interface AnswerStatistic {
+  id: string;
+  user_id: string;
+  row_category_id: string;
+  column_category_id: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Type-safe wrapper for answer_statistics queries
+const statsClient = supabase as unknown as {
+  from: (table: 'answer_statistics') => {
+    select: (query: string) => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: AnswerStatistic | null; error: unknown }>;
+          };
+          order: (col: string, opts: { ascending: boolean }) => Promise<{ data: AnswerStatistic[] | null; error: unknown }>;
+        };
+        maybeSingle: () => Promise<{ data: AnswerStatistic | null; error: unknown }>;
+      };
+    };
+    update: (data: Partial<AnswerStatistic>) => {
+      eq: (col: string, val: string) => Promise<{ error: unknown }>;
+    };
+    insert: (data: Omit<AnswerStatistic, 'id' | 'created_at' | 'updated_at'> & { usage_count?: number }) => Promise<{ error: unknown }>;
+  };
+};
 
 export default function Grid() {
   const [rowCategories, setRowCategories] = useState<Category[]>([]);
@@ -84,6 +116,17 @@ export default function Grid() {
     }
   };
 
+  const getRarityInfo = (rarity: 'legendary' | 'epic' | 'rare' | 'uncommon' | 'common') => {
+    const rarityMap = {
+      legendary: { label: 'Legendarny', color: 'text-yellow-600', bgColor: 'bg-yellow-100', icon: '⭐' },
+      epic: { label: 'Epicki', color: 'text-purple-600', bgColor: 'bg-purple-100', icon: '💎' },
+      rare: { label: 'Rzadka', color: 'text-blue-600', bgColor: 'bg-blue-100', icon: '💠' },
+      uncommon: { label: 'Nieczęsta', color: 'text-green-600', bgColor: 'bg-green-100', icon: '✨' },
+      common: { label: 'Powszechna', color: 'text-gray-600', bgColor: 'bg-gray-100', icon: '⚪' },
+    };
+    return rarityMap[rarity];
+  };
+
   const validateAnswer = async (userId: string, rowCategoryId: string, columnCategoryId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
@@ -101,8 +144,104 @@ export default function Grid() {
     }
   };
 
+  const trackAnswer = async (userId: string, rowCategoryId: string, columnCategoryId: string) => {
+    try {
+      // Check if this answer combination exists
+      const { data: existing, error: selectError } = await statsClient
+        .from('answer_statistics')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('row_category_id', rowCategoryId)
+        .eq('column_category_id', columnCategoryId)
+        .maybeSingle();
+
+      // PGRST116 is Supabase's error code for "no rows returned", which is expected when checking for existence
+      if (selectError && (selectError as { code?: string }).code !== 'PGRST116') {
+        console.error('Error checking existing answer:', selectError);
+        return;
+      }
+
+      if (existing) {
+        // Update existing record
+        const { error: updateError } = await statsClient
+          .from('answer_statistics')
+          .update({ 
+            usage_count: existing.usage_count + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        if (updateError) {
+          console.error('Error updating answer stats:', updateError);
+        }
+      } else {
+        // Insert new record
+        const { error: insertError } = await statsClient
+          .from('answer_statistics')
+          .insert({
+            user_id: userId,
+            row_category_id: rowCategoryId,
+            column_category_id: columnCategoryId,
+            usage_count: 1
+          });
+        
+        if (insertError) {
+          console.error('Error inserting answer stats:', insertError);
+        }
+      }
+    } catch (error) {
+      console.error('Error tracking answer:', error);
+    }
+  };
+
+  const calculateRarity = async (userId: string, rowCategoryId: string, columnCategoryId: string): Promise<'legendary' | 'epic' | 'rare' | 'uncommon' | 'common'> => {
+    try {
+      // Get the usage count for this specific answer
+      const { data: answerStats } = await statsClient
+        .from('answer_statistics')
+        .select('usage_count')
+        .eq('user_id', userId)
+        .eq('row_category_id', rowCategoryId)
+        .eq('column_category_id', columnCategoryId)
+        .maybeSingle();
+
+      const usageCount = answerStats?.usage_count || 1;
+
+      // Get all usage counts for this category combination to calculate percentile
+      const { data: allStats } = await statsClient
+        .from('answer_statistics')
+        .select('usage_count')
+        .eq('row_category_id', rowCategoryId)
+        .eq('column_category_id', columnCategoryId)
+        .order('usage_count', { ascending: false });
+
+      if (!allStats || allStats.length === 0) {
+        return 'legendary'; // First answer is legendary
+      }
+
+      // Calculate percentile based on usage count
+      // Count how many answers are MORE popular (higher usage_count)
+      const totalAnswers = allStats.length;
+      const morePopularCount = allStats.filter((stat: AnswerStatistic) => stat.usage_count > usageCount).length;
+      const percentile = (morePopularCount / totalAnswers) * 100;
+
+      // Assign rarity based on percentile (lower percentile = more popular = more common)
+      // Higher percentile = less popular = rarer
+      if (percentile >= 98) return 'legendary';  // Less popular than 98% of answers
+      if (percentile >= 90) return 'epic';       // Less popular than 90% of answers
+      if (percentile >= 70) return 'rare';       // Less popular than 70% of answers
+      if (percentile >= 40) return 'uncommon';   // Less popular than 40% of answers
+      return 'common';                           // More popular than 60% of answers
+    } catch (error) {
+      console.error('Error calculating rarity:', error);
+      return 'common';
+    }
+  };
+
   const handleCellClick = (row: number, col: number) => {
-    if (cells[row][col].user) return; // Don't allow changing already filled cells
+    const cell = cells[row][col];
+    // Allow clicking on empty cells or cells with incorrect answers
+    if (cell.user && cell.isCorrect === true) return; // Don't allow changing correct answers
     setActiveCell({ row, col });
     setSearchQuery('');
     setSuggestions([]);
@@ -117,8 +256,16 @@ export default function Grid() {
 
     const isCorrect = await validateAnswer(user.id, rowCategory.id, columnCategory.id);
 
+    let rarity: 'legendary' | 'epic' | 'rare' | 'uncommon' | 'common' | undefined = undefined;
+    
+    if (isCorrect) {
+      // Track the answer and calculate rarity
+      await trackAnswer(user.id, rowCategory.id, columnCategory.id);
+      rarity = await calculateRarity(user.id, rowCategory.id, columnCategory.id);
+    }
+
     const newCells = [...cells];
-    newCells[row][col] = { user, isCorrect };
+    newCells[row][col] = { user, isCorrect, rarity };
     setCells(newCells);
 
     setActiveCell(null);
@@ -158,12 +305,12 @@ export default function Grid() {
                   <div
                     key={colCat.id}
                     onClick={() => handleCellClick(rowIndex, colIndex)}
-                    className={`w-32 h-32 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-colors
+                    className={`w-32 h-32 border-2 rounded-lg flex items-center justify-center transition-colors
                       ${cell.user 
                         ? cell.isCorrect 
-                          ? 'bg-green-100 border-green-500' 
-                          : 'bg-red-100 border-red-500'
-                        : 'bg-white border-gray-300 hover:border-blue-400'
+                          ? 'bg-green-100 border-green-500 cursor-not-allowed' 
+                          : 'bg-red-100 border-red-500 cursor-pointer hover:border-red-600'
+                        : 'bg-white border-gray-300 hover:border-blue-400 cursor-pointer'
                       }
                       ${activeCell?.row === rowIndex && activeCell?.col === colIndex ? 'ring-4 ring-blue-400' : ''}
                     `}
@@ -185,6 +332,11 @@ export default function Grid() {
                         {cell.isCorrect !== null && (
                           <div className="text-xs mt-1">
                             {cell.isCorrect ? '✓ Poprawnie' : '✗ Źle'}
+                          </div>
+                        )}
+                        {cell.isCorrect && cell.rarity && (
+                          <div className={`text-xs mt-1 px-2 py-1 rounded ${getRarityInfo(cell.rarity).bgColor} ${getRarityInfo(cell.rarity).color} font-semibold`}>
+                            {getRarityInfo(cell.rarity).icon} {getRarityInfo(cell.rarity).label}
                           </div>
                         )}
                       </div>
