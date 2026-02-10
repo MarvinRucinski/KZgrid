@@ -105,6 +105,18 @@ VALUES
 - **Backend**: Supabase (PostgreSQL)
 - **Deployment**: Vercel (recommended)
 
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive deployment instructions.
+
+### Quick Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/MarvinRucinski/KZgrid&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY&envDescription=Supabase%20credentials%20required&envLink=https://github.com/MarvinRucinski/KZgrid/blob/main/DEPLOYMENT.md)
+
+**Environment Variables Required:**
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+
 ## License
 
 MIT License - see LICENSE file for details
