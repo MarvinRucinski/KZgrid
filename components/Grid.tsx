@@ -60,6 +60,7 @@ export default function Grid() {
   const [columnCategories, setColumnCategories] = useState<Category[]>([]);
   const [cells, setCells] = useState<CellData[][]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<User[]>([]);
@@ -72,14 +73,30 @@ export default function Grid() {
     try {
       const { data: categories, error } = await supabase
         .from('categories')
-        .select('*')
-        .order('position');
+        .select('*');
 
       if (error) throw error;
 
       const allCategories = (categories || []) as Category[];
-      const rows = allCategories.filter(c => c.type === 'row').slice(0, 3);
-      const cols = allCategories.filter(c => c.type === 'column').slice(0, 3);
+      
+      // Ensure we have at least 6 categories
+      if (allCategories.length < 6) {
+        console.error(`Insufficient categories: need at least 6, found ${allCategories.length}`);
+        setError(`Niewystarczająca liczba kategorii. Potrzeba co najmniej 6, znaleziono ${allCategories.length}.`);
+        setLoading(false);
+        return;
+      }
+      
+      // Fisher-Yates shuffle algorithm for unbiased randomization
+      const shuffled = [...allCategories];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      // Take first 3 for rows and next 3 for columns
+      const rows = shuffled.slice(0, 3);
+      const cols = shuffled.slice(3, 6);
 
       setRowCategories(rows);
       setColumnCategories(cols);
@@ -90,7 +107,8 @@ export default function Grid() {
       ));
       setLoading(false);
     } catch (error) {
-      console.error('Error loading categories:', error);
+      console.error('Error loading categories:', error instanceof Error ? error.message : error);
+      setError('Błąd podczas ładowania kategorii. Spróbuj odświeżyć stronę.');
       setLoading(false);
     }
   };
@@ -275,6 +293,17 @@ export default function Grid() {
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Ładowanie...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-red-100 rounded-lg">
+          <h2 className="text-2xl font-bold text-red-700 mb-4">Błąd</h2>
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
