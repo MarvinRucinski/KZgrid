@@ -119,7 +119,7 @@ export default function Grid() {
   const getRarityInfo = (rarity: 'legendary' | 'epic' | 'rare' | 'uncommon' | 'common') => {
     const rarityMap = {
       legendary: { label: 'Legendarny', color: 'text-yellow-600', bgColor: 'bg-yellow-100', icon: '⭐' },
-      epic: { label: 'Epicka', color: 'text-purple-600', bgColor: 'bg-purple-100', icon: '💎' },
+      epic: { label: 'Epicki', color: 'text-purple-600', bgColor: 'bg-purple-100', icon: '💎' },
       rare: { label: 'Rzadka', color: 'text-blue-600', bgColor: 'bg-blue-100', icon: '💠' },
       uncommon: { label: 'Nieczęsta', color: 'text-green-600', bgColor: 'bg-green-100', icon: '✨' },
       common: { label: 'Powszechna', color: 'text-gray-600', bgColor: 'bg-gray-100', icon: '⚪' },
@@ -155,6 +155,7 @@ export default function Grid() {
         .eq('column_category_id', columnCategoryId)
         .maybeSingle();
 
+      // PGRST116 is Supabase's error code for "no rows returned", which is expected when checking for existence
       if (selectError && (selectError as { code?: string }).code !== 'PGRST116') {
         console.error('Error checking existing answer:', selectError);
         return;
@@ -219,16 +220,18 @@ export default function Grid() {
       }
 
       // Calculate percentile based on usage count
+      // Count how many answers are MORE popular (higher usage_count)
       const totalAnswers = allStats.length;
-      const rank = allStats.findIndex((stat: AnswerStatistic) => stat.usage_count <= usageCount) + 1;
-      const percentile = (rank / totalAnswers) * 100;
+      const morePopularCount = allStats.filter((stat: AnswerStatistic) => stat.usage_count > usageCount).length;
+      const percentile = (morePopularCount / totalAnswers) * 100;
 
-      // Assign rarity based on percentile (lower percentile = rarer)
-      if (percentile <= 2) return 'legendary';  // Top 2%
-      if (percentile <= 10) return 'epic';      // Top 10%
-      if (percentile <= 30) return 'rare';      // Top 30%
-      if (percentile <= 60) return 'uncommon';  // Top 60%
-      return 'common';                          // Rest
+      // Assign rarity based on percentile (lower percentile = more popular = more common)
+      // Higher percentile = less popular = rarer
+      if (percentile >= 98) return 'legendary';  // Less popular than 98% of answers
+      if (percentile >= 90) return 'epic';       // Less popular than 90% of answers
+      if (percentile >= 70) return 'rare';       // Less popular than 70% of answers
+      if (percentile >= 40) return 'uncommon';   // Less popular than 40% of answers
+      return 'common';                           // More popular than 60% of answers
     } catch (error) {
       console.error('Error calculating rarity:', error);
       return 'common';
