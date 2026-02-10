@@ -53,8 +53,8 @@ export default function Grid() {
       setColumnCategories(cols);
 
       // Initialize empty grid
-      setCells(Array(3).fill(null).map(() => 
-        Array(3).fill(null).map(() => ({ user: null, isCorrect: null }))
+      setCells(Array.from({ length: 3 }, () => 
+        Array.from({ length: 3 }, () => ({ user: null, isCorrect: null }))
       ));
       setLoading(false);
     } catch (error) {
