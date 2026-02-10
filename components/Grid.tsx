@@ -60,6 +60,7 @@ export default function Grid() {
   const [columnCategories, setColumnCategories] = useState<Category[]>([]);
   const [cells, setCells] = useState<CellData[][]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<User[]>([]);
@@ -81,6 +82,7 @@ export default function Grid() {
       // Ensure we have at least 6 categories
       if (allCategories.length < 6) {
         console.error('Not enough categories: need at least 6, found', allCategories.length);
+        setError(`Niewystarczająca liczba kategorii. Potrzeba co najmniej 6, znaleziono ${allCategories.length}.`);
         setLoading(false);
         return;
       }
@@ -106,6 +108,7 @@ export default function Grid() {
       setLoading(false);
     } catch (error) {
       console.error('Error loading categories:', error);
+      setError('Błąd podczas ładowania kategorii. Spróbuj odświeżyć stronę.');
       setLoading(false);
     }
   };
@@ -290,6 +293,17 @@ export default function Grid() {
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Ładowanie...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-red-100 rounded-lg">
+          <h2 className="text-2xl font-bold text-red-700 mb-4">Błąd</h2>
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
