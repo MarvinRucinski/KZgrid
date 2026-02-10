@@ -24,6 +24,37 @@ interface CellData {
   rarity?: 'legendary' | 'epic' | 'rare' | 'uncommon' | 'common';
 }
 
+interface AnswerStatistic {
+  id: string;
+  user_id: string;
+  row_category_id: string;
+  column_category_id: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Type-safe wrapper for answer_statistics queries
+const statsClient = supabase as unknown as {
+  from: (table: 'answer_statistics') => {
+    select: (query: string) => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: AnswerStatistic | null; error: unknown }>;
+          };
+          order: (col: string, opts: { ascending: boolean }) => Promise<{ data: AnswerStatistic[] | null; error: unknown }>;
+        };
+        maybeSingle: () => Promise<{ data: AnswerStatistic | null; error: unknown }>;
+      };
+    };
+    update: (data: Partial<AnswerStatistic>) => {
+      eq: (col: string, val: string) => Promise<{ error: unknown }>;
+    };
+    insert: (data: Omit<AnswerStatistic, 'id' | 'created_at' | 'updated_at'> & { usage_count?: number }) => Promise<{ error: unknown }>;
+  };
+};
+
 export default function Grid() {
   const [rowCategories, setRowCategories] = useState<Category[]>([]);
   const [columnCategories, setColumnCategories] = useState<Category[]>([]);
@@ -116,26 +147,35 @@ export default function Grid() {
   const trackAnswer = async (userId: string, rowCategoryId: string, columnCategoryId: string) => {
     try {
       // Check if this answer combination exists
-      const { data: existing } = await supabase
+      const { data: existing, error: selectError } = await statsClient
         .from('answer_statistics')
         .select('*')
         .eq('user_id', userId)
         .eq('row_category_id', rowCategoryId)
         .eq('column_category_id', columnCategoryId)
-        .single();
+        .maybeSingle();
+
+      if (selectError && (selectError as { code?: string }).code !== 'PGRST116') {
+        console.error('Error checking existing answer:', selectError);
+        return;
+      }
 
       if (existing) {
         // Update existing record
-        await supabase
+        const { error: updateError } = await statsClient
           .from('answer_statistics')
           .update({ 
             usage_count: existing.usage_count + 1,
             updated_at: new Date().toISOString()
           })
           .eq('id', existing.id);
+        
+        if (updateError) {
+          console.error('Error updating answer stats:', updateError);
+        }
       } else {
         // Insert new record
-        await supabase
+        const { error: insertError } = await statsClient
           .from('answer_statistics')
           .insert({
             user_id: userId,
@@ -143,6 +183,10 @@ export default function Grid() {
             column_category_id: columnCategoryId,
             usage_count: 1
           });
+        
+        if (insertError) {
+          console.error('Error inserting answer stats:', insertError);
+        }
       }
     } catch (error) {
       console.error('Error tracking answer:', error);
@@ -152,18 +196,18 @@ export default function Grid() {
   const calculateRarity = async (userId: string, rowCategoryId: string, columnCategoryId: string): Promise<'legendary' | 'epic' | 'rare' | 'uncommon' | 'common'> => {
     try {
       // Get the usage count for this specific answer
-      const { data: answerStats } = await supabase
+      const { data: answerStats } = await statsClient
         .from('answer_statistics')
         .select('usage_count')
         .eq('user_id', userId)
         .eq('row_category_id', rowCategoryId)
         .eq('column_category_id', columnCategoryId)
-        .single();
+        .maybeSingle();
 
       const usageCount = answerStats?.usage_count || 1;
 
       // Get all usage counts for this category combination to calculate percentile
-      const { data: allStats } = await supabase
+      const { data: allStats } = await statsClient
         .from('answer_statistics')
         .select('usage_count')
         .eq('row_category_id', rowCategoryId)
@@ -176,7 +220,7 @@ export default function Grid() {
 
       // Calculate percentile based on usage count
       const totalAnswers = allStats.length;
-      const rank = allStats.findIndex(stat => stat.usage_count <= usageCount) + 1;
+      const rank = allStats.findIndex((stat: AnswerStatistic) => stat.usage_count <= usageCount) + 1;
       const percentile = (rank / totalAnswers) * 100;
 
       // Assign rarity based on percentile (lower percentile = rarer)
