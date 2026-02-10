@@ -74,7 +74,7 @@ app/                    # Next.js App Router pages
 └── globals.css        # Global styles
 
 components/            # React components
-└── Grid.tsx          # Main 3x3 grid component (259 lines)
+└── Grid.tsx          # Main 3x3 grid component
 
 lib/                   # Utility libraries
 └── supabase.ts       # Supabase client initialization
